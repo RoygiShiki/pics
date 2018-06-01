@@ -65,13 +65,13 @@ var App = /** @class */ (function () {
         this.dotSize = 4;
         this.imageIndex = -1;
         this.images = [
-            // 'images/p1.jpg',
-            // 'images/p2.jpg',
-            // 'images/p3.jpg',
-            // 'images/p4.jpg',
-            // 'images/p5.jpg',
-            // 'images/p6.jpg',
-            // 'images/p7.jpg',
+            'https://raw.githubusercontent.com/RoygiShiki/pics/master/images/p1.jpg',
+            'https://raw.githubusercontent.com/RoygiShiki/pics/master/images/p2.jpg',
+            'https://raw.githubusercontent.com/RoygiShiki/pics/master/images/p3.jpg',
+            'https://raw.githubusercontent.com/RoygiShiki/pics/master/images/p4.jpg',
+            'https://raw.githubusercontent.com/RoygiShiki/pics/master/images/p5.jpg',
+            'https://raw.githubusercontent.com/RoygiShiki/pics/master/images/p6.jpg',
+            'https://raw.githubusercontent.com/RoygiShiki/pics/master/images/p7.jpg',
         ];
         this.started = false;
         this.getContrast = function (color) {
