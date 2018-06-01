@@ -1,0 +1,313 @@
+console.clear();
+
+class Dot 
+{
+    _start:Position = {x:0, y:0};
+    _position:Position = {x:0, y:0};
+    _target:Position = {x: 0, y: 0};
+    _curve:Position = {x: 0, y:0};
+
+    speed:number;
+    ctx:any;
+    graphic:any;
+
+    opacity:number = 0;
+    targetOpacity:number = 0.5;
+    delay:number = 0;
+
+    constructor(ctx:any, graphic:any, start:Position)
+    {
+        this.ctx = ctx;
+        this.graphic = graphic;
+
+        this._start = start;
+        this._position = start;
+    }
+
+    setPosition(index:number, newPos:Position, curve:Position, opacity:number, width:number, height:number, size:number, jump:boolean = false)
+    {
+        newPos.x = Math.round(newPos.x);
+        newPos.y = Math.round(newPos.y);
+
+        this._target = newPos;   
+        this._start = this._position;   
+        this._curve = curve;
+        this.delay = ((newPos.x + size - width / 2) + (newPos.y + size - height / 2)) * 3;
+
+        this.targetOpacity = opacity;
+    }
+
+    get position():Position
+    {
+        return this._position;
+    }
+
+    getPointOnBezierCurve(start:Position, curve:Position, target:Position, time:number):Position
+    {
+        let rt = 1 - time;
+        let x = rt * rt * start.x + 2 * rt * time * curve.x + time * time * target.x;
+        let y = rt * rt * start.y + 2 * rt * time * curve.y + time * time * target.y;
+        return {x: x, y: y}
+     }
+
+    ease = (t) => { return t<.5 ? 8*t*t*t*t : 1-8*(--t)*t*t*t }
+
+    update(time:number)
+    {
+        let timeValue = (time - this.delay) / 2500;
+        if(timeValue > 1) timeValue = 1;
+
+        if(timeValue >= 0)
+        {
+            let t = this.ease(timeValue);
+            this.opacity += (this.targetOpacity - this.opacity) * t;
+            this._position = this.getPointOnBezierCurve(this._start, this._curve, this._target, t)
+        }
+
+        this.ctx.globalAlpha = this.opacity;
+        this.ctx.drawImage(this.graphic, this._position.x, this._position.y);
+        this.ctx.globalAlpha = 1;
+        
+    }
+}
+
+class App
+{
+	width:number = 0;
+    height:number = 0;
+	canvas:HTMLElement;
+    ctx:any;
+
+    dots:Dot[] = [];
+    positions:Position[] = [];
+    gridSize = 350;
+    gridSpace = 1;
+	
+	startTime:number;
+    lastTime:number;
+
+    dotCount = 0;
+    dotSize = 4;
+    imageIndex = -1;
+    images = [
+		'http://ste.vg/assets/dotty-wotty/flower.jpg',
+		'http://ste.vg/assets/dotty-wotty/lion.jpg',
+		'http://ste.vg/assets/dotty-wotty/rose.jpg',
+		'http://ste.vg/assets/dotty-wotty/dog.jpg',
+		'http://ste.vg/assets/dotty-wotty/me.jpg',
+    ]
+    started = false;
+
+    currentImage:any;
+	
+	constructor() 
+    {
+ 		this.canvas = document.getElementById('canvas');
+		
+		this.onResize();
+        this.calculateAvaliablePositions();
+
+        this.ctx = this.canvas.getContext('2d', {alpha: false});
+        this.ctx.fillStyle = "#4E4E4E";
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        let dotCanvas = document.createElement('canvas');
+        dotCanvas.width = this.dotSize;
+        dotCanvas.height = this.dotSize;
+        let dotCtx = dotCanvas.getContext('2d');
+
+        dotCtx.beginPath();
+        dotCtx.arc(this.dotSize / 2, this.dotSize / 2, this.dotSize/ 2, 0, Math.PI * 2);
+        dotCtx.fillStyle = "#FFFFFF";
+        dotCtx.fill();
+
+        for(let i = 0; i < this.positions.length; i++)
+        {
+           let pos = this.shiftPosition(this.grid(i));
+           this.spreadPosition(pos);
+           let dot = new Dot(this.ctx, dotCanvas, pos);
+           this.dots.push(dot);
+        }
+
+        Rx.Observable.fromEvent(window, 'resize').subscribe(() => this.onResize());
+       
+        this.next();
+    }
+
+    calculateAvaliablePositions()
+    {
+        let jump = (this.dotSize + this.gridSpace);
+        let radius:number = this.gridSize / 2;
+        let center:Position = {x: this.gridSize / 2, y: this.gridSize / 2}
+
+        for(let i = 0; i < this.gridSize / jump; i++)
+        {
+          for(let j = 0; j < this.gridSize / jump; j++)
+          {
+              let offset = j % 2 ? jump / 2 : 0;
+              let pos:Position = {x: offset + jump * i, y: jump * j};
+              if((pos.x - center.x)**2 + (pos.y - center.y)**2 < radius**2)
+              {
+                  this.positions.push(pos);
+              }
+          } 
+        }
+    }
+
+    next()
+    {
+        this.imageIndex++;
+        if(this.imageIndex >= this.images.length) this.imageIndex = 0;
+        this.loadImage().then((image) => 
+        {
+          this.currentImage = image;
+          this.reloadDots();
+          if(!this.started) this.tick(null);
+          this.started = true;
+        })
+
+        setTimeout(() => this.next(), 7000)
+    }
+
+    randomPosition():Position
+    {
+        return {x: Math.random() * this.width, y: Math.random() * this.height};
+    }
+
+    onResize()
+    {
+        this.width = this.canvas.parentElement.offsetWidth;
+        this.height = this.canvas.parentElement.offsetHeight;
+
+        this.canvas.setAttribute('width', this.width)
+        this.canvas.setAttribute('height', this.height)
+    }
+
+    shuffle(a) 
+    {
+      for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    reloadDots()
+    {
+		this.startTime = this.lastTime ? this.lastTime : 0;
+        let i = -1;
+        this.dots.map((dot:Dot) => 
+        {
+            i++;
+            
+            let pos = this.grid(i);
+
+            let shiftedPos = this.shiftPosition(pos);
+            
+            let curve = this.grid(i);
+            this.spreadPosition(curve);
+
+            let percentX = (pos.x / this.gridSize) * 100;
+            let percentY = (pos.y / this.gridSize) * 100;
+            
+            let contrast = this.getContrast(String(this.getPixel(percentX, percentY)));
+            dot.setPosition(i, shiftedPos, curve, contrast || 0, this.width, this.height, this.gridSize)
+        })
+    }
+
+    shiftPosition(pos:Position):Position
+    {
+      return {
+        x: pos.x + this.width / 2 - this.gridSize / 2,
+        y: pos.y + this.height / 2 - this.gridSize / 2
+      }
+    }
+
+    spreadPosition(pos)
+    {
+      pos.x += this.width / 3.5 + ((Math.random() * 600) - 300) - this.gridSize / 2;
+      pos.y += this.height / 2 + ((Math.random() * 600) - 300) - this.gridSize / 2;
+    }
+
+    grid(i)
+    {
+        return {x: this.positions[i].x, y: this.positions[i].y};
+    }
+
+    getContrast = (color:string) => 
+    { 
+        const [r, g, b] = [0, 2, 4].map( p => parseInt( color.substr( p, 2 ), 16 ) ); 
+        return (((r * 299) + (g * 587) + (b * 114)) / 1000 / 256); 
+    }
+
+    loadImage():Promise<any>
+    {
+        return new Promise((resolve:any, reject:any) => 
+        {
+          	let img = new Image();
+			img.crossOrigin = "Anonymous";
+          	img.onload = () => resolve(this.getImageData(img))
+          	img.src = this.images[this.imageIndex];
+        }) 
+    }
+
+    getImageData( image ) 
+    {
+
+        var canvas = document.createElement( 'canvas' );
+        canvas.width = image.width;
+        canvas.height = image.height;
+    
+        var context = canvas.getContext( '2d' );
+        context.drawImage( image, 0, 0 );
+    
+        return context.getImageData( 0, 0, image.width, image.height );
+    }
+
+    radius(k, n, b)
+    {
+        if(k > (n - b)) return 1; 
+        return Math.sqrt(k-1/2)/Math.sqrt(n-(b+1)/2); 
+    }
+  
+    getPixel(percentX, percentY) 
+    {
+        let size = this.currentImage.width > this.currentImage.height ? this.currentImage.height : this.currentImage.width;
+        let x = Math.round((percentX / 100) * size);
+        let y = Math.round((percentY / 100) * size);
+        
+        if(x < 0) x = 0;
+        if(x > this.currentImage.width) x = this.currentImage.width;
+        if(y < 0) y = 0;
+        if(y > this.currentImage.height) y = this.currentImage.height;
+        
+        var r, g, b, a, offset = x * 4 + y * 4 * this.currentImage.width;
+        if(offset + 3 > this.currentImage.data.length) offset = this.currentImage.data.length - 4;
+        r = this.currentImage.data[offset];
+        g = this.currentImage.data[offset + 1];
+        b = this.currentImage.data[offset + 2];
+        
+        let str = "" + this.componentToHex(r) + this.componentToHex(g) + this.componentToHex(b);
+        return str;
+    }
+
+    componentToHex(c) {
+        var hex = c.toString(16);
+        return hex.length == 1 ? "0" + hex : hex;
+    }
+
+    tick(t)
+    {
+        if(!this.startTime || this.startTime == 0) this.startTime = t;
+        this.lastTime = t;
+
+        this.ctx.globalAlpha = 1;
+        this.ctx.fillStyle = "#4E4E4E";
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        this.ctx.globalAlpha = 1;
+        this.dots.map((dot:Dot) => dot.update(t - this.startTime))
+        window.requestAnimationFrame((t) => this.tick(t))
+    }
+}
+
+let app = new App();
